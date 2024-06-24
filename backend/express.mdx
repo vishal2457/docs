@@ -1,0 +1,254 @@
+---
+description: typesafe apis in express
+---
+
+[Learn Express](https://expressjs.com/)
+
+## Folder structure
+
+```
+app
+|-- api
+|   |-- src
+|   |   |-- assets
+|   |   |-- db
+|   |   |   |-- [prepared-statements](#prepared-statements)
+|   |   |   |-- [seed](#db-seed-data)
+|   |   |   |-- [db.ts](#db)
+|   |   |-- [routes](#routes)
+|   |   |   |-- v1
+|   |   |   |    |-- user
+|   |   |   |        |-- create-user.api.ts
+|   |   |   |        |-- get-all-users.api.ts
+|   |   |   |        |-- id
+|   |   |   |            |-- update-user.ts
+|   |   |   |            |-- delete-user.ts
+|   |   |   |            |-- get-user.ts
+|   |   |   `-- v2
+|   |   |-- shared
+|   |   |   |-- [api-response](#api-response)
+|   |   |   |-- [firebase](#firebase)
+|   |   |   |-- [jwt](#jwt)
+|   |   |   |-- [logger](#logger)
+|   |   |   |-- [middlewares](#middlewares)
+|   |   |   |-- [queue](#queue)
+|   |   |   |-- [socket](#socket)
+|   |   |   |-- global-constants.ts
+|   |   |   |-- [mail-service.ts](#mail-service)
+|   |   |   |-- password-hash.ts
+|   |   |-- [templates](#email-templates)
+|   |   |-- [types](#shared-types)
+|   |   |-- [express-app.ts](#express-app.ts)
+`---------- [main.ts](#main.ts)
+```
+
+## main.ts
+
+This file initializes server.
+
+<br />
+Here you would want to handle things like ssl, db connection, service initialization
+etc.
+
+```typescript
+import * as dotenv from "dotenv";
+dotenv.config({ path: `${process.cwd()}/.env` });
+import http from "http";
+import app from "./express-app";
+import { APP_SETTINGS } from "./shared/app-settings";
+import { checkDbConnection } from "./db/db";
+
+async function main() {
+  const server = http.createServer(app);
+  checkDbConnection();
+
+  server.listen(APP_SETTINGS.PORT, () => {
+    // handle server start success
+  });
+}
+main();
+```
+
+## Express app ts
+
+This is where you should keep express related code. For eg: middlewares, routes etc.
+
+## routes
+
+This is a feature directory, where all your endpoints and modules will be added.
+Routes has router.ts where all the base endpoints are added.
+
+Module directory best practices:
+
+- Each api endpoint will have a seperate file.
+- Endpoints with id will be in id folder
+- We follow angular file naming conventions for naming our directories and files.
+- File names should give an indication of feature and endpoint.
+
+Code generator:
+
+- codegen will generate a CRUD and seperate file for all the api's
+
+## db.ts
+
+We use [drizzle ORM](https://orm.drizzle.team/docs/overview) to execute queries in our express app.
+
+All the schema are registered in db.ts.
+
+Db connection is also handled in this file.
+
+```typescript
+const pool = new Pool({
+  host: APP_SETTINGS.DB_HOST,
+  port: APP_SETTINGS.DB_PORT,
+  user: APP_SETTINGS.DB_USERNAME,
+  password: APP_SETTINGS.DB_PASSWORD,
+  database: APP_SETTINGS.DB_NAME,
+});
+```
+
+## Seed DB data
+
+Write functions you want to execute to seed data in db.
+
+Execute seed data with package json script
+drizzle:seed OR tsx ./path/to/seed.ts
+
+```typescript seed.postgres.ts
+async function seed() {
+  await db.delete(TB_menu);
+  await db.insert(TB_menu).values(seedMenu);
+
+  await db.delete(TB_user).where(eq(TB_user.email, "test@test.com"));
+  await db
+    .insert(TB_user)
+    .values([{ email: "test@test.com", password: hashPassword("123") }]);
+
+  process.exit(0);
+}
+```
+
+## Prepared statements
+
+[Read more](https://orm.drizzle.team/docs/perf-queries#prepared-statement)
+
+## Api response
+
+Common functions to handle express API responses
+[Read more](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)
+
+```typescript
+//200 OK
+export const success = (res: Response, data: any, msg: string) => {
+  if (APP_SETTINGS.ENCRYPT) {
+    //encrypt data
+  }
+  const response = {
+    data,
+    status: ReasonPhrases.OK,
+    statusCode: StatusCodes.OK,
+    msg,
+  };
+  res.status(response.statusCode).send(response);
+};
+
+//500 SERVER ERROR
+export const serverError = (res: Response, err: any) => {
+  const response = {
+    status: ReasonPhrases.INTERNAL_SERVER_ERROR,
+    statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
+    stack: APP_SETTINGS.IS_DEVELOPMENT ? err.stack : "",
+  };
+
+  res.status(response.statusCode).send(response);
+};
+
+//404 Not Found
+export const notFound = (res: Response, msg: string) => {
+  const response = {
+    status: ReasonPhrases.NOT_FOUND,
+    statusCode: StatusCodes.NOT_FOUND,
+    msg,
+  };
+  res.status(response.statusCode).send(response);
+};
+
+//401 Unauthorized
+export const unauthorized = (res: Response, msg: string) => {
+  const response = {
+    status: ReasonPhrases.UNAUTHORIZED,
+    statusCode: StatusCodes.UNAUTHORIZED,
+    msg,
+  };
+  res.status(response.statusCode).send(response);
+};
+
+//400 Bad Request
+export const other = (res: Response, msg: string) => {
+  const response = {
+    status: ReasonPhrases.BAD_REQUEST,
+    statusCode: StatusCodes.BAD_REQUEST,
+    msg,
+  };
+  res.status(response.statusCode).send(response);
+};
+
+//409 conflict (Used for duplicate values mainly)
+export const alreadyExist = (res: Response, msg: string) => {
+  const response = {
+    status: ReasonPhrases.CONFLICT,
+    statusCode: StatusCodes.CONFLICT,
+    msg,
+  };
+  res.status(response.statusCode).send(response);
+};
+```
+
+## Firebase Notifications
+
+Send FCM notifications to mobile devices
+[Read More](https://firebase.google.com/docs/cloud-messaging)
+
+## Json Web Token (JWT)
+
+Common functions to use jwt for autorization
+[Read More](https://www.npmjs.com/package/jsonwebtoken)
+
+## Queue (BullMQ queue)
+
+BullMQ implements a fast and robust queue system.
+
+It is used for handling background jobs and task scheduling.
+[Read More](https://docs.bullmq.io/)
+
+## Logger
+
+We use winston and morgan for logging in our express app.
+
+Varioud types of logger
+
+```typescript looger.ts
+export const logger = {
+  log,
+  info: _logger.infoLogger.info.bind(_logger.infoLogger),
+  error: _logger.errorLogger.error.bind(_logger.errorLogger),
+  email: _logger.emailLogger.info.bind(_logger.emailLogger),
+  http: _logger.httpLogger.info.bind(_logger.httpLogger),
+};
+```
+
+[Read More](https://github.com/winstonjs/winston)
+
+## Socket
+
+[Read More](https://socket.io/docs/v4/server-initialization/#with-an-http-server)
+
+## Mail service
+
+Utility functions to handle emails.
+
+Template parser to parse html templates
+
+[Nodemailer](https://www.nodemailer.com/)
+
+[Handlebars](https://handlebarsjs.com/)
